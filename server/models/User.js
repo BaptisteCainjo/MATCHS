@@ -12,13 +12,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const mongoose_1 = __importDefault(require("mongoose"));
+const mongoose_1 = require("mongoose");
 const bcrypt_1 = __importDefault(require("bcrypt"));
-const userSchema = new mongoose_1.default.Schema({
-    password: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
+const UserSchema = new mongoose_1.Schema({
+    email: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true,
+        lowercase: true,
+    },
+    password: {
+        type: String,
+        required: true,
+    },
 });
-userSchema.pre("save", function (next) {
+UserSchema.pre("save", function (next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             if (!this.isModified("password"))
@@ -34,7 +43,7 @@ userSchema.pre("save", function (next) {
     });
 });
 // Validate password
-userSchema.methods.validPassword = function (password) {
+UserSchema.methods.validPassword = function (password) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             return yield bcrypt_1.default.compare(password, this.password);
@@ -44,5 +53,5 @@ userSchema.methods.validPassword = function (password) {
         }
     });
 };
-const User = mongoose_1.default.model("User", userSchema);
+const User = (0, mongoose_1.model)("User", UserSchema);
 exports.default = User;

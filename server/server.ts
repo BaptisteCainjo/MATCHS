@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from "express";
+import express, { Request, Response } from "express";
 import mongoose from "mongoose";
 import session from "express-session";
 import cookieParser from "cookie-parser";
@@ -34,9 +34,19 @@ app.use(
     credentials: true,
   })
 );
+const sessionSecret = process.env.SESSION_SECRET;
+const JwtSecretKey = process.env.JWT_SECRET_KEY;
+
+if (!sessionSecret) {
+  throw new Error("SESSION_SECRET is required!");
+}
+
+if (!JwtSecretKey) {
+  throw new Error("JWT_SECRET_KEY is required!");
+}
 app.use(
   session({
-    secret: "votre-secret",
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -75,7 +85,7 @@ passport.use(
 );
 
 passport.serializeUser((user: any, done) => {
-  done(null, user._id);
+  done(null, user.id);
 });
 
 passport.deserializeUser(async (id, done) => {
@@ -88,58 +98,49 @@ passport.deserializeUser(async (id, done) => {
 });
 
 // Routes
-app.post(
-  "/signup",
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const { email, password } = req.body;
-      const existingUser = await User.findOne({ email });
+app.post("/signup", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, password } = req.body;
+    const existingUser = await User.findOne({ email });
 
-      if (existingUser) {
-        res.status(400).json({
-          message: "Email déjà pris",
+    if (existingUser) {
+      res.status(400).json({
+        message: "Email déjà pris",
+      });
+      return;
+    }
+
+    const newUser = new User({
+      email,
+      password,
+    });
+    await newUser.save();
+
+    req.login(newUser, (err) => {
+      if (err) {
+        res.status(500).json({
+          message: "Erreur lors de l'inscription",
         });
         return;
       }
 
-      const newUser = new User({
-        email,
-        password,
+      res.status(201).json({
+        message: "Inscription réussie",
+        user: newUser,
       });
-      await newUser.save();
-
-      req.login(newUser, (err) => {
-        if (err) {
-          res.status(500).json({
-            message: "Erreur lors de l'inscription",
-          });
-          return;
-        }
-
-        res.status(201).json({
-          message: "Inscription réussie",
-          user: newUser,
-        });
-      });
-    } catch (error) {
-      next(error);
-    }
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error during signup" });
   }
-);
-
-// ... existing code ...
+});
 
 app.post(
   "/login",
   passport.authenticate("local"),
   (req: Request, res: Response): void => {
-    // Créer un objet simple avec uniquement les propriétés nécessaires
-    const userPayload = {
-      id: (req.user as any)._id,
-      email: (req.user as any).email,
-    };
+    const userPayload = { email: (req.user as any).email };
 
-    const token = jwt.sign(userPayload, "your-secret-key", {
+    const token = jwt.sign(userPayload, JwtSecretKey, {
       expiresIn: "1h",
     });
 
@@ -156,55 +157,38 @@ app.post(
   }
 );
 
-// ... existing code ...
-
 app.get("/logout", (req: Request, res: Response): void => {
   req.logout((err) => {
     if (err) {
-      res.status(500).json({ message: "Erreur lors de la déconnexion" });
-      return;
+      return res.status(500).json({ message: "Erreur lors de la déconnexion" });
     }
     res.status(200).json({ message: "Déconnexion réussie" });
   });
 });
 
-app.get(
-  "/profile",
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    console.log("Session:", req.session);
+app.get("/profile", async (req: Request, res: Response): Promise<void> => {
+  console.log("Session:", req.session);
 
-    const token = req.cookies.token;
+  const token = req.cookies.token;
 
-    if (!token) {
-      res.status(401).json({
-        message: "Non authentifié",
-      });
-      return;
-    }
-
-    try {
-      const decoded = jwt.verify(token, "your-secret-key") as JwtPayload;
-      const user = {
-        username: decoded.username || "Utilisateur",
-        email: decoded.email || "inconnu",
-      };
-
-      res.status(200).json({
-        user,
-      });
-    } catch (error) {
-      console.error(error);
-      next(error);
-    }
+  if (!token) {
+    res.status(401).json({ message: "Non authentifié" });
+    return;
   }
-);
 
-// Error handling middleware
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error(err);
-  res.status(500).json({
-    message: "Internal server error",
-  });
+  try {
+    const decoded = jwt.verify(token, JwtSecretKey) as JwtPayload;
+
+    const user = {
+      username: decoded.username || "Utilisateur",
+      email: decoded.email || "inconnu",
+    };
+
+    res.status(200).json({ user });
+  } catch (error) {
+    console.error(error);
+    res.status(401).json({ message: "Non authentifié" });
+  }
 });
 
 // Server setup

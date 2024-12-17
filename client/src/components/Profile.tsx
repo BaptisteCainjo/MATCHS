@@ -32,7 +32,14 @@ export default function Profile() {
   return (
     <div>
       <h2> Profil </h2>{" "}
-      {user ? <p> Bienvenue, {user.email} </p> : <p>Non authentifié</p>}{" "}
+      {user ? (
+        <p>
+          {" "}
+          Bienvenue, {user.username} {user.email}{" "}
+        </p>
+      ) : (
+        <p>Non authentifié</p>
+      )}{" "}
     </div>
   );
 }

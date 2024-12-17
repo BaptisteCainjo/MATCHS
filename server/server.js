@@ -38,8 +38,16 @@ app.use((0, cors_1.default)({
     origin: "http://localhost:5173",
     credentials: true,
 }));
+const sessionSecret = process.env.SESSION_SECRET;
+const JwtSecretKey = process.env.JWT_SECRET_KEY;
+if (!sessionSecret) {
+    throw new Error("SESSION_SECRET is required!");
+}
+if (!JwtSecretKey) {
+    throw new Error("JWT_SECRET_KEY is required!");
+}
 app.use((0, express_session_1.default)({
-    secret: "votre-secret",
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -69,7 +77,7 @@ passport_1.default.use(new passport_local_1.Strategy({
     }
 })));
 passport_1.default.serializeUser((user, done) => {
-    done(null, user._id);
+    done(null, user.id);
 });
 passport_1.default.deserializeUser((id, done) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -81,7 +89,7 @@ passport_1.default.deserializeUser((id, done) => __awaiter(void 0, void 0, void 
     }
 }));
 // Routes
-app.post("/signup", (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+app.post("/signup", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { email, password } = req.body;
         const existingUser = yield User_1.default.findOne({ email });
@@ -110,17 +118,12 @@ app.post("/signup", (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         });
     }
     catch (error) {
-        next(error);
+        res.status(500).json({ message: "Error during signup" });
     }
 }));
-// ... existing code ...
 app.post("/login", passport_1.default.authenticate("local"), (req, res) => {
-    // Créer un objet simple avec uniquement les propriétés nécessaires
-    const userPayload = {
-        id: req.user._id,
-        email: req.user.email,
-    };
-    const token = jsonwebtoken_1.default.sign(userPayload, "your-secret-key", {
+    const userPayload = { email: req.user.email };
+    const token = jsonwebtoken_1.default.sign(userPayload, JwtSecretKey, {
         expiresIn: "1h",
     });
     res.cookie("token", token, {
@@ -133,47 +136,34 @@ app.post("/login", passport_1.default.authenticate("local"), (req, res) => {
         user: req.user,
     });
 });
-// ... existing code ...
 app.get("/logout", (req, res) => {
     req.logout((err) => {
         if (err) {
-            res.status(500).json({ message: "Erreur lors de la déconnexion" });
-            return;
+            return res.status(500).json({ message: "Erreur lors de la déconnexion" });
         }
         res.status(200).json({ message: "Déconnexion réussie" });
     });
 });
-app.get("/profile", (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+app.get("/profile", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     console.log("Session:", req.session);
     const token = req.cookies.token;
     if (!token) {
-        res.status(401).json({
-            message: "Non authentifié",
-        });
+        res.status(401).json({ message: "Non authentifié" });
         return;
     }
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, "your-secret-key");
+        const decoded = jsonwebtoken_1.default.verify(token, JwtSecretKey);
         const user = {
             username: decoded.username || "Utilisateur",
             email: decoded.email || "inconnu",
         };
-        res.status(200).json({
-            user,
-        });
+        res.status(200).json({ user });
     }
     catch (error) {
         console.error(error);
-        next(error);
+        res.status(401).json({ message: "Non authentifié" });
     }
 }));
-// Error handling middleware
-app.use((err, _req, res, _next) => {
-    console.error(err);
-    res.status(500).json({
-        message: "Internal server error",
-    });
-});
 // Server setup
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
