@@ -35,7 +35,7 @@ export default function Profile() {
       {user ? (
         <p>
           {" "}
-          Bienvenue , {user.username} {user.email}{" "}
+          Bienvenue, {user.username} {user.email}{" "}
         </p>
       ) : (
         <p>Non authentifié</p>
