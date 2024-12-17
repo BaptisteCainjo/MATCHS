@@ -38,7 +38,7 @@ export default function Profile() {
           Bienvenue, {user.username} {user.email}{" "}
         </p>
       ) : (
-        <p>Non authentifié</p>
+        <p>Non authentifié </p>
       )}{" "}
     </div>
   );
