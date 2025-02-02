@@ -5,9 +5,11 @@ import cookieParser from "cookie-parser";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import cors from "cors";
-import jwt, { JwtPayload } from "jsonwebtoken";
 import dotenv from "dotenv";
 dotenv.config();
+
+import router from "./routes/index.js";
+import { sessionSecret } from "./utils/constants.js";
 
 import User from "./models/User";
 
@@ -27,6 +29,7 @@ app.use(
     extended: true,
   })
 );
+
 app.use(cookieParser());
 app.use(
   cors({
@@ -34,19 +37,10 @@ app.use(
     credentials: true,
   })
 );
-const sessionSecret = process.env.SESSION_SECRET;
-const JwtSecretKey = process.env.JWT_SECRET_KEY;
 
-if (!sessionSecret) {
-  throw new Error("SESSION_SECRET is required!");
-}
-
-if (!JwtSecretKey) {
-  throw new Error("JWT_SECRET_KEY is required!");
-}
 app.use(
   session({
-    secret: sessionSecret,
+    secret: sessionSecret || "",
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -59,6 +53,8 @@ app.use(
 );
 app.use(passport.initialize());
 app.use(passport.session());
+
+app.use("/api", router);
 
 // Passport configuration
 passport.use(
@@ -98,64 +94,6 @@ passport.deserializeUser(async (id, done) => {
 });
 
 // Routes
-app.post("/signup", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, password } = req.body;
-    const existingUser = await User.findOne({ email });
-
-    if (existingUser) {
-      res.status(400).json({
-        message: "Email déjà pris",
-      });
-      return;
-    }
-
-    const newUser = new User({
-      email,
-      password,
-    });
-    await newUser.save();
-
-    req.login(newUser, (err) => {
-      if (err) {
-        res.status(500).json({
-          message: "Erreur lors de l'inscription",
-        });
-        return;
-      }
-
-      res.status(201).json({
-        message: "Inscription réussie",
-        user: newUser,
-      });
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Error during signup" });
-  }
-});
-
-app.post(
-  "/login",
-  passport.authenticate("local"),
-  (req: Request, res: Response): void => {
-    const userPayload = { email: (req.user as any).email };
-
-    const token = jwt.sign(userPayload, JwtSecretKey, {
-      expiresIn: "1h",
-    });
-
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 3600000,
-    });
-
-    res.status(200).json({
-      message: "Connexion réussie",
-      user: req.user,
-    });
-  }
-);
 
 app.get("/logout", (req: Request, res: Response): void => {
   req.logout((err) => {
@@ -164,31 +102,6 @@ app.get("/logout", (req: Request, res: Response): void => {
     }
     res.status(200).json({ message: "Déconnexion réussie" });
   });
-});
-
-app.get("/profile", async (req: Request, res: Response): Promise<void> => {
-  console.log("Session:", req.session);
-
-  const token = req.cookies.token;
-
-  if (!token) {
-    res.status(401).json({ message: "Non authentifié" });
-    return;
-  }
-
-  try {
-    const decoded = jwt.verify(token, JwtSecretKey) as JwtPayload;
-
-    const user = {
-      username: decoded.username || "Utilisateur",
-      email: decoded.email || "inconnu",
-    };
-
-    res.status(200).json({ user });
-  } catch (error) {
-    console.error(error);
-    res.status(401).json({ message: "Non authentifié" });
-  }
 });
 
 // Server setup

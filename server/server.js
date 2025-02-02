@@ -19,9 +19,10 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const passport_1 = __importDefault(require("passport"));
 const passport_local_1 = require("passport-local");
 const cors_1 = __importDefault(require("cors"));
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
+const index_js_1 = __importDefault(require("./routes/index.js"));
+const constants_js_1 = require("./utils/constants.js");
 const User_1 = __importDefault(require("./models/User"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 8001;
@@ -38,16 +39,8 @@ app.use((0, cors_1.default)({
     origin: "http://localhost:5173",
     credentials: true,
 }));
-const sessionSecret = process.env.SESSION_SECRET;
-const JwtSecretKey = process.env.JWT_SECRET_KEY;
-if (!sessionSecret) {
-    throw new Error("SESSION_SECRET is required!");
-}
-if (!JwtSecretKey) {
-    throw new Error("JWT_SECRET_KEY is required!");
-}
 app.use((0, express_session_1.default)({
-    secret: sessionSecret,
+    secret: constants_js_1.sessionSecret || "",
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -59,6 +52,7 @@ app.use((0, express_session_1.default)({
 }));
 app.use(passport_1.default.initialize());
 app.use(passport_1.default.session());
+app.use("/api", index_js_1.default);
 // Passport configuration
 passport_1.default.use(new passport_local_1.Strategy({
     usernameField: "email",
@@ -89,53 +83,6 @@ passport_1.default.deserializeUser((id, done) => __awaiter(void 0, void 0, void 
     }
 }));
 // Routes
-app.post("/signup", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { email, password } = req.body;
-        const existingUser = yield User_1.default.findOne({ email });
-        if (existingUser) {
-            res.status(400).json({
-                message: "Email déjà pris",
-            });
-            return;
-        }
-        const newUser = new User_1.default({
-            email,
-            password,
-        });
-        yield newUser.save();
-        req.login(newUser, (err) => {
-            if (err) {
-                res.status(500).json({
-                    message: "Erreur lors de l'inscription",
-                });
-                return;
-            }
-            res.status(201).json({
-                message: "Inscription réussie",
-                user: newUser,
-            });
-        });
-    }
-    catch (error) {
-        res.status(500).json({ message: "Error during signup" });
-    }
-}));
-app.post("/login", passport_1.default.authenticate("local"), (req, res) => {
-    const userPayload = { email: req.user.email };
-    const token = jsonwebtoken_1.default.sign(userPayload, JwtSecretKey, {
-        expiresIn: "1h",
-    });
-    res.cookie("token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 3600000,
-    });
-    res.status(200).json({
-        message: "Connexion réussie",
-        user: req.user,
-    });
-});
 app.get("/logout", (req, res) => {
     req.logout((err) => {
         if (err) {
@@ -144,26 +91,6 @@ app.get("/logout", (req, res) => {
         res.status(200).json({ message: "Déconnexion réussie" });
     });
 });
-app.get("/profile", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    console.log("Session:", req.session);
-    const token = req.cookies.token;
-    if (!token) {
-        res.status(401).json({ message: "Non authentifié" });
-        return;
-    }
-    try {
-        const decoded = jsonwebtoken_1.default.verify(token, JwtSecretKey);
-        const user = {
-            username: decoded.username || "Utilisateur",
-            email: decoded.email || "inconnu",
-        };
-        res.status(200).json({ user });
-    }
-    catch (error) {
-        console.error(error);
-        res.status(401).json({ message: "Non authentifié" });
-    }
-}));
 // Server setup
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

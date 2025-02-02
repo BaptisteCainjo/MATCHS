@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 export default function Signup() {
   const [password, setPassword] = useState("");
@@ -7,21 +7,22 @@ export default function Signup() {
 
   const handleSignup = async () => {
     try {
-      const response = await axios.post("http://localhost:8000/signup", {
-        password,
-        email,
-      });
+      const response = await axios.post(
+        "http://localhost:8000/api/auth/signup",
+        {
+          password,
+          email,
+        }
+      );
 
-      // Vérifier si la propriété 'data' existe avant d'y accéder
       if (response && response.data) {
         console.log(response.data);
       } else {
         console.error("Réponse inattendue:", response);
       }
-    } catch (error: any) {
-      // Vérifier si la propriété 'response' et 'data' existent avant d'y accéder
-      if (error.response && error.response.data) {
-        console.error(error.response.data);
+    } catch (error: unknown) {
+      if (error instanceof AxiosError) {
+        console.error(error.response?.data);
       } else {
         console.error("Erreur inattendue:", error);
       }
